@@ -1,0 +1,24 @@
+#Load preprocessed data from hdfs to hive
+CREATE TABLE IF NOT EXISTS preprocessed_tweetsNew ( id String, text STRING) ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' LINES TERMINATED BY '\n' STORED AS TEXTFILE;
+LOAD DATA INPATH '/data001/outsentimentNew3/part*' OVERWRITE INTO TABLE preprocessed_tweets2;  
+
+create table split_words as select id as id,split(text,' ') as words from preprocessed_tweets;
+
+create table tweet_word as select id as id,word from split_words LATERAL VIEW explode(words) w as word;
+
+#Load positive and negative words and itz weight to hive
+create table dictionary(word string,rating int) ROW FORMAT DELIMITED FIELDS TERMINATED BY '\t';
+LOAD DATA INPATH '/data001/AFINN.txt' into TABLE dictionary;
+
+create table word_join as select tweet_word.id,tweet_word.word,dictionary.rating from tweet_word RIGHT OUTER JOIN dictionary ON(tweet_word.word=dictionary.word);
+
+create table individualTweetSentiment as select id,SUM(rating) as rating from word_join GROUP BY word_join.id order by rating DESC;
+
+Positve tweet count
+select count(*) from individualTweetSentiment where rating>0; --> 218
+
+Negative tweet count
+select count(*) from individualTweetSentiment where rating<0; --> 76
+
+Neutral Tweet count
+select count(*) from individualTweetSentiment where rating=0; --> 1
